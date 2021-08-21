@@ -41,19 +41,7 @@ def extract_date_from_string(string: str) -> pd.Timestamp:
     return date
 
 
-def extract_big_blind_from_string(string: str) -> float:
-    """
-    >>> string = "$0.01/$0.02 Blinds No Limit Holdem - *** 15 05 2020 21:40:28\\n"
-    >>> extract_big_blind_from_string(string)
-    0.02
-    """
-    currency_pattern = "(?:[\£\$\€]{1}[,\d]+.?\d*)"
-    big_blind_raw = re.findall(currency_pattern, string)[-1]
-    big_blind = float(big_blind_raw.replace("$", "").strip())
-    return big_blind
-
-
-def extract_table_name_from_string(string: str) -> str:
+def extract_table_name(string: str) -> str:
     """
     >>> string = "Table Osaka 6 Max (Real Money)\\n"
     >>> extract_table_name_from_string(string)
