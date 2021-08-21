@@ -209,6 +209,7 @@ def plot_winnings(df: pd.DataFrame) -> plt.plot:
     plt.title(f"Session results ({date})")
     plt.xlabel("Number of hands")
     plt.ylabel("Winnings / losings (in $)")
+    plt.axhline(0)
     plt.tight_layout()
     plt.savefig(f"plots/{date.replace('-', '')}_session_results.png", dpi=300)
     plt.show()
