@@ -168,10 +168,11 @@ def extract_game_results(hand_history: list, hero: str, website: str) -> pd.Data
 
         hand_details.append(
             {
-                "hand_number_table": i,
-                "game_id": game_id,
+                "website": website,
                 "date": date,
                 "table": table,
+                "game_id": game_id,
+                "hand_number_table": i,
                 "start_stack": start_stack,
                 "result": result,
                 "win": round(win, 2),
