@@ -6,10 +6,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-def extract_currency_amount_from_string(string: str) -> float:
+def extract_currency_amount(string: str) -> float:
     """
     >>> string = "Seat 4: superpippa69 ( $2 )\\n"
-    >>> extract_currency_amount_from_string(string)
+    >>> extract_currency_amount(string)
     2.0
     """
     currency_pattern = "(?:[\£\$\€]{1}[,\d]+.?\d*)"
@@ -18,25 +18,30 @@ def extract_currency_amount_from_string(string: str) -> float:
     return currency_amount
 
 
-def extract_start_stack_from_hand(hand: str, hero: str) -> float:
+def extract_start_stack(hand: str, hero: str) -> float:
     """
     >>> hand = ['***** 888poker Hand History for Game 1361371073 *****', '...', 'Seat 6: superpippa69 ( $2.02 )']
-    >>> extract_start_stack_from_hand(hand, hero="superpippa69")
+    >>> extract_start_stack(hand, hero="superpippa69")
     2.02
     """
     for elem in hand:
         if hero in elem and "Seat" in elem:
-            start_stack = extract_currency_amount_from_string(elem)
+            start_stack = extract_currency_amount(elem)
             return start_stack
 
 
-def extract_date_from_string(string: str) -> pd.Timestamp:
+def extract_date(string: str, website: str) -> pd.Timestamp:
     """
     >>> string = "$0.01/$0.02 Blinds No Limit Holdem - *** 15 05 2020 21:40:28\\n"
-    >>> extract_date_from_string(string)
+    >>> extract_date(string, website="888")
     Timestamp('2020-05-15 21:40:28')
     """
-    date_raw = re.search(r"\d{2} \d{2} \d{4} \d{2}:\d{2}:\d{2}", string)
+    if website == "888":
+        date_raw = re.search(r"\d{2} \d{2} \d{4} \d{2}:\d{2}:\d{2}", string)
+    elif website == "pokerstars":
+        date_raw = re.search(r"\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}", string)
+    else:
+        raise ValueError(f"website {website} not supported.")
     date = pd.Timestamp(date_raw.group())
     return date
 
@@ -44,20 +49,27 @@ def extract_date_from_string(string: str) -> pd.Timestamp:
 def extract_table_name(string: str) -> str:
     """
     >>> string = "Table Osaka 6 Max (Real Money)\\n"
-    >>> extract_table_name_from_string(string)
-    'Osaka 6 Max'
+    >>> extract_table_name(string)
+    'Osaka'
     """
-    table_name = string.replace("Table", "").replace("(Real Money)\n", "").strip()
+    string_list = string.split(" ")
+    table_name_idx = string_list.index("Table") + 1
+    table_name = string_list[table_name_idx].replace("'", "")
     return table_name
 
 
-def extract_game_id_from_string(string: str) -> str:
+def extract_game_id(string: str, website: str) -> str:
     """
     >>> string = "#Game No : 1361372999"
-    >>> extract_game_id_from_string(string)
+    >>> extract_game_id(string)
     '1361372999'
     """
-    game_id = string.split(":")[1].strip()
+    if website == "888":
+        game_id = string.split(":")[1].strip()
+    elif website == "pokerstars":
+        game_id = string.split(":")[0].split("#")[1]
+    else:
+        raise ValueError(f"website {website} not supported.")
     return game_id
 
 
@@ -67,10 +79,10 @@ def open_hand_history(file_name: str) -> list:
     return hand_history_raw
 
 
-def extract_winners_from_hand(hand: str) -> list:
+def extract_winners(hand: str) -> list:
     """
     >>> hand = ["#Game No : 1361373647", "...", "walimay collected [ $2.02 ]", "superpippa69 collected [ $2.02 ]"]
-    >>> extract_winners_from_hand(hand)
+    >>> extract_winners(hand)
     ['superpippa69', 'walimay']
     """
     winners = []
@@ -86,9 +98,9 @@ def extract_return_from_split_pot(hand: str) -> float:
     win, invest = 0, 0
     for elem in hand:
         if hero in elem and any(i in elem for i in ["posts", "bets", "calls", "raises"]):
-            invest += extract_currency_amount_from_string(elem)
+            invest += extract_currency_amount(elem)
         if hero in elem and "collected" in elem:
-            win = extract_currency_amount_from_string(elem)
+            win = extract_currency_amount(elem)
     return round(win - invest, 2)
 
 
@@ -99,10 +111,10 @@ def extract_return_from_losing_hand(hand: str) -> float:
             winner = elem[: elem.index("collected")].strip()  # extract winner
     for elem in hand:  # extract start stack of winner
         if winner in elem and "Seat" in elem:
-            start_stack_winner = extract_currency_amount_from_string(elem)
+            start_stack_winner = extract_currency_amount(elem)
     for elem in hand:  # extract investment
         if hero in elem and any(i in elem for i in ["posts", "bets", "calls", "raises"]):
-            invest += extract_currency_amount_from_string(elem)
+            invest += extract_currency_amount(elem)
     loss = min(invest, start_stack_winner)  # we cannot lose more than the winner had
     return round(-loss, 2)
 
@@ -112,7 +124,7 @@ def convert_raw_hand_history(hand_history_raw: list) -> list:
     for i, v in enumerate(hand_history_raw):
         if i >= len(hand_history_raw) - 2:  # avoid list index out of range error
             continue
-        if "#Game No" in v:
+        if "#Game No" in v or "Hand #" in v:
             start_of_hand = i
         if (
             v == "\n"
@@ -125,17 +137,20 @@ def convert_raw_hand_history(hand_history_raw: list) -> list:
     return hand_history
 
 
-def extract_results_from_hand_history(hand_history: list, hero: str) -> pd.DataFrame:
-    table = extract_table_name_from_string(
-        hand_history[0][3]
-    )  # Extract table name from first hand
+def extract_game_results(hand_history: list, hero: str, website: str) -> pd.DataFrame:
+    table = hand_history[0][3] if website == "888" else hand_history[0][1]
+    table = extract_table_name(table)  # Extract table name from first hand
     hand_details = []
     for i, hand in enumerate(hand_history, start=1):
-        result, win = "NA", np.nan  # inizialize variables
-        date = extract_date_from_string(hand[2])
-        game_id = extract_game_id_from_string(hand[0])
-        start_stack = extract_start_stack_from_hand(hand, hero=hero)
-        winners = extract_winners_from_hand(hand)
+        if website == "pokerstars":  # Remove summary
+            idx = hand.index("*** SUMMARY ***\n")
+            hand = hand[:idx]
+        date_substring = hand[2] if website == "888" else hand[0]
+        result, win = "NA", np.nan  # initialize variables
+        date = extract_date(date_substring, website=website)
+        game_id = extract_game_id(hand[0], website=website)
+        start_stack = extract_start_stack(hand, hero=hero)
+        winners = extract_winners(hand)
 
         if hero not in winners:
             result = "no win"
@@ -143,7 +158,7 @@ def extract_results_from_hand_history(hand_history: list, hero: str) -> pd.DataF
         elif hero in winners and len(winners) == 1:
             result = "win"
             if i < len(hand_history) - 1:  # avoid list index out of range error
-                start_stack_next = extract_start_stack_from_hand(hand_history[i + 1], hero=hero)
+                start_stack_next = extract_start_stack(hand_history[i + 1], hero=hero)
             else:
                 start_stack_next = np.nan  # TODO: better solution
             win = start_stack_next - start_stack
@@ -175,10 +190,11 @@ def final_data_preprocessing(df: pd.DataFrame) -> pd.DataFrame:
 
 def main_loop(file_names: list, hero: str) -> pd.DataFrame:
     df = pd.DataFrame()
+    website = file_names[0].split("_")[0]
     for file_name in file_names:
         hand_history_raw = open_hand_history("hand_histories/" + file_name)
         hand_history = convert_raw_hand_history(hand_history_raw)
-        df_ind = extract_results_from_hand_history(hand_history, hero=hero)
+        df_ind = extract_game_results(hand_history, hero=hero, website=website)
         df = df.append(df_ind)
     df = final_data_preprocessing(df)
     return df
