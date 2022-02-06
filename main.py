@@ -37,9 +37,9 @@ def extract_date(string: str, website: str) -> pd.Timestamp:
     Timestamp('2020-05-15 21:40:28')
     """
     if website == "888":
-        date_raw = re.search(r"\d{2} \d{2} \d{4} \d{2}:\d{2}:\d{2}", string)
+        date_raw = re.search(r"[0-9]+ [0-9]+ [0-9]+ [0-9]+:[0-9]+:[0-9]+", string)
     elif website == "pokerstars":
-        date_raw = re.search(r"\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}", string)
+        date_raw = re.search(r"[0-9]+/[0-9]+/[0-9]+ [0-9]+:[0-9]+:[0-9]+", string)
     else:
         raise ValueError(f"website {website} not supported.")
     date = pd.Timestamp(date_raw.group())
